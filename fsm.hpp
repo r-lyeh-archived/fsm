@@ -1,5 +1,5 @@
 /*
- * Simple FSM class
+ * Simple FSM/HFSM class
  * Copyright (c) 2011, 2012, 2013, 2014 Mario 'rlyeh' Rodriguez
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -53,13 +53,16 @@
  * - http://en.wikipedia.org/wiki/Finite-state_machine
 
  * todo:
- * - HFSM? GOAP? behavior trees?
- * - stack: HFSM
- * - substates: state {0,1,2...}
+ * - GOAP? behavior trees?
+ * - trigger args
  * - counters
 
  * - rlyeh
  */
+
+// - note on child states (tree of fsm's):
+//   - triggers are handled to the most inner active state in the decision tree
+//   - unhandled triggers are delegated to the parent state handler until handled or discarded by root state
 
 #pragma once
 
@@ -68,176 +71,217 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <map>
+#include <iostream>
+#include <sstream>
+#include <algorithm>
 
 namespace fsm
 {
-    // trigger and state are both child classes, which are named strings
+    template<typename T>
+    inline std::string to_string( const T &t ) {
+        std::stringstream ss;
+        return ss << t ? ss.str() : std::string();
+    }
 
-    template< unsigned id >
-    struct child : public std::string {
-        explicit
-        child( const std::string &name = std::string() ) : std::string(name)
+    template<>
+    inline std::string to_string( const std::string &t ) {
+        return t;
+    }
+
+    struct args : public std::vector< std::string > {
+        args() : std::vector< std::string >()
         {}
-
-        template<typename T>
-        bool operator()( T &t ) const {
-            return id == 1 ? t( *this ) : false;
+        template<typename T0>
+        args( const T0 &t0 )  : std::vector< std::string >(1) {
+            (*this)[0] = fsm::to_string(t0);
+        }
+        template<typename T0, typename T1>
+        args( const T0 &t0, const T1 &t1 ) : std::vector< std::string >(2) {
+            (*this)[0] = fsm::to_string(t0);
+            (*this)[1] = fsm::to_string(t1);
         }
     };
 
-    typedef child<0> state;
-    typedef child<1> trigger;
+    class state;
+    typedef std::function< void( const fsm::args &args ) > code;
 
-    typedef std::deque< state > states_history;
-    typedef std::deque< trigger > triggers_history;
+    class state : public std::string {
+    public:
 
-class core
-{
-public:
+        fsm::args args;
 
-    // methods
+        explicit
+        state( const std::string &name = std::string() ) : std::string(name)
+        {}
 
-    core()
-    {}
-
-    virtual ~core()
-    {}
-
-    core &add_trigger( const fsm::trigger &name ) {
-        return preconfig(), *this;
-    }
-
-    core &add_state( const fsm::state &name ) {
-        return preconfig(), *this;
-    }
-
-    state get_state( int pos = 0 ) const {
-        signed size = signed(states.size());
-        if( !size ) {
-            static fsm::state invalid;
-            return invalid = fsm::state("");
+        state operator()() const {
+            state self = *this;
+            self.args = fsm::args();
+            return self;
         }
-        return states[ pos >= 0 ? pos % size : size - 1 + ((pos+1) % size) ];
-    }
-
-    trigger get_trigger( int pos = 0 ) const {
-        signed size = signed(triggers.size());
-        if( !size ) {
-            static fsm::trigger invalid;
-            return invalid = fsm::trigger("");
+        template<typename T0>
+        state operator()( const T0 &t0 ) const {
+            state self = *this;
+            self.args = fsm::args(t0);
+            return self;
         }
-        return triggers[ pos >= 0 ? pos % size : size - 1 + ((pos+1) % size) ];
-    }
+        template<typename T0, typename T1>
+        state operator()( const T0 &t0, const T1 &t1 ) const {
+            state self = *this;
+            self.args = fsm::args(t0,t1);
+            return self;
+        }
 
-    const   states_history &get_states_history()   const { return states;   }
-    const triggers_history &get_triggers_history() const { return triggers; }
+        protected: std::vector< fsm::state > stack;
+    };
 
-    bool has_triggered() const { return !triggers.back().empty(); }
-    void clear_trigger_flag() { triggers.push_back( fsm::trigger("") ); }
+    class stack {
+    public:
 
-    // transitions to override
+        stack( const fsm::state &start = fsm::state("{undefined}") ) : deque(1) {
+            deque[0] = start;
+            begin( deque.back() );
+        }
 
-    virtual state first() = 0;
-    virtual state next() = 0;
+        void push( const fsm::state &state ) {
+            if( deque.size() && deque.back() == state ) {
+                return;
+            }
+            // queue
+            pause( deque.back() );
+            deque.push_back( state );
+            begin( deque.back() );
+        }
+        void next( const fsm::state &state ) {
+            if( deque.size() ) {
+                follow( deque.back(), state );
+            } else {
+                push(state);
+            }
+        }
+        void pop() {
+            if( deque.size() ) {
+                end( deque.back() );
+                deque.pop_back();
+                resume( deque.back() );
+            }
+        }
+        size_t size() const {
+            return deque.size();
+        }
+        void start(const fsm::state &state) {
+            next( state );
+        }
 
-    // optional callbacks to override
-
-    std::function< fsm::state( void ) > on_first;
-    std::function< fsm::state( void ) > on_next;
-    std::function< void( std::string ) > on_warning;
-    std::function< void( std::string ) > on_verbose;
-
-    // sugars:
-
-    core &operator<<( const state &state     ) { return add_state( state );     }
-    core &operator<<( const trigger &trigger ) { return add_trigger( trigger ); }
-
-      state get_current_state()     const { return states.front(); }
-      state get_previous_state()    const { return *++states.begin(); }
-    trigger get_current_trigger()   const { return triggers.front(); }
-    trigger get_previous_trigger()  const { return *++triggers.begin(); }
-
-    // fsm engine core
-
-    bool did( const fsm::trigger &trigger ) const {
-        return trigger == triggers.front();
-    }
-
-    bool is( const fsm::state &state ) const {
-        return state == states.front();
-    }
-
-    bool operator[]( const fsm::state &state ) const {
-        return is( state );
-    }
-
-    bool exec( const fsm::trigger &trigger ) {
-        return operator()( trigger );
-    }
-
-    bool operator()( const fsm::trigger &trigger ) {
-
-        triggers.push_front( trigger );
-        state current = next();
-        triggers.pop_front();
-
-        if( current.empty() ) {
-            if( on_warning ) {
-                std::stringstream line;
-                line << "<fsm/fsm.hpp> says: [FAIL] invalid fsm::trigger " << trigger << "() raised on state [" << get_current_state() << "]";
-                on_warning( line.str() );
+        bool exec( const fsm::state &trigger ) {
+            size_t size = this->size();
+            if( !size ) {
+                return false;
+            }
+            current_trigger = std::string();
+            std::deque< rit > cancelled;
+            for( rit it = deque.rbegin(); it != deque.rend(); ++it ) {
+                fsm::state &self = *it;
+                if( !call(self,trigger) ) {
+                    cancelled.push_back(it);
+                    continue;
+                }
+                for( std::deque< rit >::iterator it = cancelled.begin(), end = cancelled.end(); it != end; ++it ) {
+                    (*it)->end();
+                    deque.erase(--(it->base()));
+                }
+                current_trigger = trigger;
+                return true;
             }
             return false;
         }
 
-        // info
-        std::stringstream line;
-        line << "[" << get_current_state() << "]->" << trigger << "->[" << current << "]";
-
-        log.push_back( line.str() );
-
-        if( log.size() > 60 )
-            log.pop_front();
-
-        if( on_verbose ) {
-            on_verbose( std::string() + "<fsm/fsm.hpp> says: " + log.back() );
+        // [] classic behaviour: "hello"[5] = undefined, "hello"[-1] = undefined
+        // [] extended behaviour: "hello"[5] = h, "hello"[-1] = o, "hello"[-2] = l
+        fsm::state get_state( signed int pos = -1 ) const {
+            signed size = (signed)(deque.size());
+            if( !size ) {
+                return fsm::state();
+            }
+            return *( deque.begin() + ( pos >= 0 ? pos % size : size - 1 + ((pos+1) % size) ) );
+        }
+        std::string get_trigger() const {
+            return current_trigger;
         }
 
-        // triggers history generation; push no dupes; max fixed size of 60
-        if( triggers.empty() || triggers.front() != trigger )
-            triggers.push_front( trigger );
+        bool is( const fsm::state &state ) const {
+            return deque.empty() ? false : ( deque.back() == state );
+        }
 
-        if( triggers.size() > 60 )
-            triggers.pop_back();
+        /* (idle)___(trigger)__/''(hold)''''(release)''\__
+        bool is_idle()      const { return transition.previous == transition.current; }
+        bool is_triggered() const { return transition.previous == transition.current; }
+        bool is_hold()      const { return transition.previous == transition.current; }
+        bool is_released()  const { return transition.previous == transition.current; } */
 
-        // states history generation; push no dupes; max fixed size of 60
-        if( states.empty() || states.front() != current )
-            states.push_front( current );
+        std::string debug() const {
+            std::string out;
+            for( cit it = deque.begin(), end = deque.end(); it != end; ++it ) {
+                out += (*it) + ',';
+            }
+            return out;
+        }
 
-        if( states.size() > 60 )
-            states.pop_back();
+        bool call( const fsm::state &from, const fsm::state &to ) const {
+            std::map< bistate, fsm::code >::const_iterator code = callbacks.find(bistate(from,to));
+            if( code == callbacks.end() ) {
+                return false;
+            } else {
+                code->second( to.args );
+                return true;
+            }
+        }
 
-        return true;
-    }
+        fsm::code &on( const fsm::state &from, const fsm::state &to ) {
+            return callbacks[ bistate(from,to) ] = callbacks[ bistate(from,to) ];
+        }
 
-    // debug
-
-    std::deque< std::string > get_log() const {
-        return log;
-    }
-
-    // fsm details
+        bool operator()( const fsm::state &trigger ) {
+            return exec( trigger );
+        }
 
     protected:
 
-        states_history   states;
-        triggers_history triggers;
-        std::deque< std::string > log;
-
-        void preconfig() {
-            // init history
-            states = states_history({ first(), fsm::state() });
-            triggers = triggers_history({ fsm::trigger() });
+        void begin( const fsm::state &state ) {
+            call( state, fsm::state("begin") );
         }
-}; // fsm::core
-}  // ::fsm
+
+        void end( const fsm::state &state ) {
+            call( state, fsm::state("end") );
+        }
+
+        void pause( const fsm::state &state ) {
+            call( state, fsm::state("pause") );
+        }
+
+        void resume( const fsm::state &state ) {
+            call( state, fsm::state("resume") );
+        }
+
+        void follow( fsm::state &current, const fsm::state &next ) {
+            end( current );
+            current = next;
+            begin( current );
+        }
+
+        typedef std::pair<std::string, std::string> bistate;
+        std::map< bistate, fsm::code > callbacks;
+
+        std::deque< fsm::state > log;
+        std::deque< fsm::state > deque;
+        std::string current_trigger;
+
+        struct status {
+            fsm::state previous, trigger, current;
+        } transition;
+
+        typedef std::deque< fsm::state >::const_iterator cit;
+        typedef std::deque< fsm::state >::reverse_iterator rit;
+    };
+}
