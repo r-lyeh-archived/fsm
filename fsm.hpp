@@ -144,6 +144,12 @@ namespace fsm
             begin( deque.back() );
         }
 
+        ~stack() {
+            while( size() ) {
+                pop();
+            }
+        }
+
         void push( const fsm::state &state ) {
             if( deque.size() && deque.back() == state ) {
                 return;
@@ -164,6 +170,8 @@ namespace fsm
             if( deque.size() ) {
                 end( deque.back() );
                 deque.pop_back();
+            }
+            if( deque.size() ) {
                 resume( deque.back() );
             }
         }
