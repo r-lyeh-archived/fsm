@@ -136,6 +136,10 @@ namespace fsm
         protected: std::vector< fsm::state > stack;
     };
 
+    struct transition {
+        fsm::state previous, trigger, current;
+    };
+
     class stack {
     public:
 
@@ -187,7 +191,7 @@ namespace fsm
             if( !size ) {
                 return false;
             }
-            current_trigger = std::string();
+            current_trigger = fsm::state();
             std::deque< rit > cancelled;
             for( rit it = deque.rbegin(); it != deque.rend(); ++it ) {
                 fsm::state &self = *it;
@@ -214,6 +218,13 @@ namespace fsm
             }
             return *( deque.begin() + ( pos >= 0 ? pos % size : size - 1 + ((pos+1) % size) ) );
         }
+        fsm::transition get_log( signed int pos = -1 ) const {
+            signed size = (signed)(log.size());
+            if( !size ) {
+                return fsm::transition();
+            }
+            return *( log.begin() + ( pos >= 0 ? pos % size : size - 1 + ((pos+1) % size) ) );
+        }
         std::string get_trigger() const {
             return current_trigger;
         }
@@ -236,11 +247,17 @@ namespace fsm
             return out;
         }
 
-        bool call( const fsm::state &from, const fsm::state &to ) const {
+        bool call( const fsm::state &from, const fsm::state &to ) /*const*/ {
             std::map< bistate, fsm::code >::const_iterator code = callbacks.find(bistate(from,to));
             if( code == callbacks.end() ) {
                 return false;
             } else {
+
+                log.push_back( { from, current_trigger, to } );
+                if( log.size() > 50 ) {
+                    log.pop_front();
+                }
+
                 code->second( to.args );
                 return true;
             }
@@ -281,13 +298,9 @@ namespace fsm
         typedef std::pair<std::string, std::string> bistate;
         std::map< bistate, fsm::code > callbacks;
 
-        std::deque< fsm::state > log;
+        std::deque< fsm::transition > log;
         std::deque< fsm::state > deque;
-        std::string current_trigger;
-
-        struct status {
-            fsm::state previous, trigger, current;
-        } transition;
+        fsm::state current_trigger;
 
         typedef std::deque< fsm::state >::const_iterator cit;
         typedef std::deque< fsm::state >::reverse_iterator rit;
