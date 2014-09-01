@@ -1,22 +1,3 @@
-fsm
-===
-
-- FSM is a lightweight Hierarchical/Finite-state Machine (H/FSM) class.
-- FSM is expressive. Basic usage around `on(state,trigger) -> do lambda` expression.
-- FSM is simple. Both HFSM and FSM implementations are provided.
-- FSM is tiny. Header-only.
-- FSM is cross-platform.
-- FSM is stand-alone. No dependencies.
-- FSM is MIT licensed.
-
-### API
-@todoc
-
-### Links
-[Finite-State Machines: Theory and Implementation](http://gamedevelopment.tutsplus.com/tutorials/finite-state-machines-theory-and-implementation--gamedev-11867)
-
-### Sample
-```c++
 // basic hfsm sample
 
 #include <iostream>
@@ -77,4 +58,3 @@ int main( int argc, const char **argv ) {
         mini.fsm(update());
     }
 }
-```

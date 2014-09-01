@@ -1,20 +1,21 @@
+// basic fsm, CD player sample
+
 #include <iostream>
 #include "fsm.hpp"
 
-using namespace fsm;
+// common triggers (verbs). you must provide these for all FSMs
+fsm::state begin("begin"), end("end"), pause("pause"), resume("resume");
 
-    //
-    fsm::state begin("begin"), end("end"), pause("pause"), resume("resume");
+// custom states (gerunds)
+fsm::state
+    opening("opening"), closing("closing"),
+    waiting("waiting"), playing("playing");
 
-    // available states and triggers
-    fsm::state
-        opening("opening"), closing("closing"),
-        waiting("waiting"), playing("playing");
-
-    fsm::state
-        open("open"), close("close"),
-        play("play"), stop("stop"),
-        insert("insert"), eject("eject");
+// custom triggers (verbs)
+fsm::state
+    open("open"), close("close"),
+    play("play"), stop("stop"),
+    insert("insert"), eject("eject");
 
 class cd_player
 {
@@ -39,7 +40,7 @@ class cd_player
         // set initial fsm state
         fsm = opening;
 
-        // define states
+        // define fsm transitions: on(state,trigger) -> do lambda
         fsm.on(opening,close) = [&]( const fsm::args &args ) {
             close_tray();
             if( !has_cd ) {
@@ -87,52 +88,8 @@ class cd_player
     }
 };
 
-fsm::state update("udpate");
-fsm::state walking("walking"), attacking("attacking");
-
-class ant {
-public:
-        fsm::stack fsm;
-        int health, distance, flow;
-
-        ant() : health(0), distance(0), flow(1) {
-            // initial state
-            fsm = walking;
-
-            // setup
-            fsm.on(walking,resume) = [&]( const fsm::args &args ) {
-                std::cout << "pre-walk! distance:" << distance << std::endl;
-            };
-            fsm.on(walking,update) = [&]( const fsm::args &args ) {
-                std::cout << "\r" << "\\|/-"[ distance % 4 ] << " walking " << (flow > 0 ? "-->" : "<--") << " ";
-                distance += flow;
-                if( 1000 == distance ) {
-                    std::cout << "at food!" << std::endl;
-                    flow = -flow;
-                }
-                if( -1000 == distance ) {
-                    std::cout << "at home!" << std::endl;
-                    flow = -flow;
-                }
-            };
-            fsm.on(attacking,begin) = [&]( const fsm::args &args ) {
-                std::cout << "pre-attack!" << std::endl;
-                health = 1000;
-            };
-            fsm.on(attacking,update) = [&]( const fsm::args &args ) {
-                std::cout << "\r" << "\\|/-$"[ distance % 4 ] << " fighting !! hp:(" << health << ")   ";
-                --health;
-                if( health < 0 ) {
-                    std::cout << std::endl;
-                    fsm.pop();
-                }
-            };
-        }
-};
-
 int main( int argc, const char **argv ) {
 
-    // basic fsm sample
     cd_player cd;
 
     for(;;) {
@@ -154,12 +111,5 @@ int main( int argc, const char **argv ) {
             default : std::cout << "what?" << std::endl;
         }
         if( cmd == 'q' ) break;
-    }
-
-    // hfsm ant sample
-    ant mini;
-    for(;;) {
-        if( 0 == rand() % 10000 ) mini.fsm.push(attacking);
-        mini.fsm(update());
     }
 }
