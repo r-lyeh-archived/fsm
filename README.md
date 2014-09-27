@@ -7,7 +7,7 @@ fsm
 - FSM is tiny. Header-only.
 - FSM is cross-platform.
 - FSM is stand-alone. No dependencies.
-- FSM is MIT licensed.
+- FSM is BOOST licensed.
 
 ### API
 @todoc
