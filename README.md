@@ -1,4 +1,4 @@
-fsm
+fsm <a href="https://travis-ci.org/r-lyeh/fsm"><img src="https://api.travis-ci.org/r-lyeh/fsm.svg?branch=master" align="right" /></a>
 ===
 
 - FSM is a lightweight Hierarchical/Finite-state Machine (H/FSM) class.
