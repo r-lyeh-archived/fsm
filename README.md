@@ -7,7 +7,7 @@ fsm <a href="https://travis-ci.org/r-lyeh/fsm"><img src="https://api.travis-ci.o
 - FSM is tiny. Header-only.
 - FSM is cross-platform.
 - FSM is stand-alone. No dependencies.
-- FSM is BOOST licensed.
+- FSM is ZLIB/LibPNG licensed.
 
 ### API
 @todoc
